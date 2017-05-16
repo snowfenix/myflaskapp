@@ -24,11 +24,7 @@ def index():
     return render_template('home.html')
 
 
-@app.route('/about')
-def about():
-    return render_template('about.html')
-
-
+# GET articles
 @app.route('/articles')
 def articles():
     cur = mysql.connection.cursor()
@@ -47,6 +43,7 @@ def articles():
     cur.close()
 
 
+# Get article
 @app.route('/article/<string:id>/')
 def article(id):
     cur = mysql.connection.cursor()
@@ -69,6 +66,7 @@ class RegisterForm(Form):
     confirm = PasswordField('Confirm Password')
 
 
+# Register
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegisterForm(request.form)
@@ -107,6 +105,7 @@ def login_required(f):
     return decorated_function
 
 
+# Logout
 @app.route('/logout')
 @login_required
 def logout():
@@ -115,6 +114,7 @@ def logout():
     return redirect(url_for('login'))
 
 
+# Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -152,7 +152,7 @@ def login():
             return render_template('login.html', error=error)
     return render_template('login.html')
 
-
+# Dashboard
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
@@ -176,6 +176,8 @@ class ArticleForm(Form):
     title = StringField('Title', [validators.Length(min=1, max=200)])
     body = TextAreaField('Body', [validators.Length(min=30)])
 
+
+# Add article
 @app.route('/add_article', methods=['GET', 'POST'])
 @login_required
 def add_article():
@@ -197,6 +199,56 @@ def add_article():
 
         return redirect(url_for('dashboard'))
     return render_template('add_article.html', form=form)
+
+
+# Edit article
+@app.route('/edit_article/<string:id>', methods=['GET', 'POST'])
+@login_required
+def edit_article(id):
+    # create cursor
+    cur = mysql.connection.cursor()
+
+    # get article by id
+    result = cur.execute("SELECT * FROM articles WHERE id = %s", [id])
+
+    article = cur.fetchone()
+
+    # get form
+    form = ArticleForm(request.form)
+
+    # populate article form field
+    form.title.data = article['title']
+    form.body.data = article['body']
+
+    if request.method == 'POST' and form.validate():
+        title = request.form['title']
+        body = request.form['body']
+
+        # create cursor
+        cur = mysql.connection.cursor()
+
+        cur.execute("UPDATE articles SET title=%s, body=%s WHERE ID = %s", (title, body, id))
+
+        mysql.connection.commit()
+
+        cur.close()
+
+        flash('Article Uploaded', 'success')
+
+        return redirect(url_for('dashboard'))
+    return render_template('edit_article.html', form=form)
+
+
+# Delete article
+@app.route('/delete_article/<string:id>', methods=['POST'])
+@login_required
+def delete_article(id):
+    cur = mysql.connection.cursor()
+    cur.execute("DELETE FROM articles WHERE ID=%s", [id])
+    mysql.connection.commit()
+    cur.close()
+    flash('Article Deleted', 'success')
+    return redirect(url_for('dashboard'))
 
 
 if __name__ == '__main__':
