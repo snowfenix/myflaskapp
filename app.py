@@ -16,7 +16,7 @@ app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 
 # init MYSQL
 mysql = MySQL(app)
-Articles = Articles()
+# Articles = Articles()
 
 
 @app.route('/')
@@ -31,12 +31,31 @@ def about():
 
 @app.route('/articles')
 def articles():
-    return render_template('articles.html', articles=Articles)
+    cur = mysql.connection.cursor()
+
+    # get articles
+    result = cur.execute("SELECT * FROM articles")
+
+    articles = cur.fetchall()
+
+    if result > 0:
+        return render_template('articles.html', articles=articles)
+    else:
+        msg = 'No articles Found'
+        return render_template('articles.html', msg=msg)
+    
+    cur.close()
 
 
 @app.route('/article/<string:id>/')
 def article(id):
-    return render_template('article.html', id=id)
+    cur = mysql.connection.cursor()
+
+    # get articles
+    result = cur.execute("SELECT * FROM articles WHERE ID = %s", [id])
+
+    article = cur.fetchone()
+    return render_template('article.html', article=article)
 
 
 class RegisterForm(Form):
@@ -76,11 +95,6 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('You are logged out', 'success')
-    return redirect(url_for('login'))
 
 # check if user logged in
 def login_required(f):
@@ -91,6 +105,15 @@ def login_required(f):
         flash('Unauthorized, please login', 'danger')
         return redirect(url_for('login'))
     return decorated_function
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    session.clear()
+    flash('You are logged out', 'success')
+    return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -133,7 +156,47 @@ def login():
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    cur = mysql.connection.cursor()
+
+    # get articles
+    result = cur.execute("SELECT * FROM articles")
+
+    articles = cur.fetchall()
+
+    if result > 0:
+        return render_template('dashboard.html', articles=articles)
+    else:
+        msg = 'No articles Found'
+        return render_template('dashboard.html', msg=msg)
+    
+    cur.close()
+
+
+class ArticleForm(Form):
+    title = StringField('Title', [validators.Length(min=1, max=200)])
+    body = TextAreaField('Body', [validators.Length(min=30)])
+
+@app.route('/add_article', methods=['GET', 'POST'])
+@login_required
+def add_article():
+    form = ArticleForm(request.form)
+    if request.method == 'POST' and form.validate():
+        title = form.title.data
+        body = form.body.data
+
+        # create cursor
+        cur = mysql.connection.cursor()
+
+        cur.execute("INSERT INTO articles(title, body, author) VALUES(%s, %s, %s)", (title, body, session['username']))
+
+        mysql.connection.commit()
+
+        cur.close()
+
+        flash('Article Created', 'success')
+
+        return redirect(url_for('dashboard'))
+    return render_template('add_article.html', form=form)
 
 
 if __name__ == '__main__':
